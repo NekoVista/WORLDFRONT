@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WORLDFRONT — Territory War</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pusher/8.4.0-rc2/pusher.min.js"></script>
+<style>
+  :root{
+    --bg:#c9dde6;
+    --panel:#152238;
+    --panel-2:#1c3050;
+    --border:#ffffff14;
+    --border-strong:#0a1424;
+    --text:#eef4f8;
+    --muted:#93a6bd;
+    --accent:#f0b93d;
+    --accent-dim:#f0b93d33;
+    --danger:#e5484d;
+    --amber:#f0b93d;
+    --neutral-land:#9fbf7f;
+    --water:#6fa8c9;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;overflow:hidden;}
+  h1,h2,h3,.display{font-family:'Rubik',sans-serif;}
+  #app{display:flex;height:100vh;width:100vw;}
+
+  /* ---------- LEFT: MAP ---------- */
+  #mapWrap{flex:1 1 0;min-width:0;display:flex;flex-direction:column;position:relative;background:var(--bg);}
+  #topbar{display:flex;align-items:center;gap:14px;padding:12px 20px;background:var(--panel);box-shadow:0 2px 10px #00000030;position:relative;z-index:2;}
+  #topbar .logo{font-family:'Rubik',sans-serif;font-size:18px;font-weight:700;letter-spacing:.5px;color:var(--text);}
+  #topbar .logo span{color:var(--accent);}
+  #topbar .sub{font-size:11px;color:var(--muted);letter-spacing:.3px;}
+  #mapStage{flex:1;position:relative;display:flex;align-items:center;justify-content:center;padding:16px;min-height:0;min-width:0;}
+  #canvasFrame{position:relative;box-shadow:0 4px 24px #00000040, 0 0 0 1px #ffffff40; border-radius:6px;overflow:hidden;display:inline-block;max-width:100%;max-height:100%;min-width:0;}
+  #mapCanvas{display:block;image-rendering:pixelated;background:var(--water);cursor:crosshair;max-width:100%;height:auto;}
+  #overlayCanvas{position:absolute;top:0;left:0;pointer-events:none;max-width:100%;width:100%;height:auto;display:block;}
+  #hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:11px;color:#fff;
+    background:#152238cc;padding:6px 14px;border-radius:20px;letter-spacing:.2px;white-space:nowrap;box-shadow:0 2px 8px #0000002a;}
+  #bannerLayer{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+  .banner{pointer-events:auto;background:#ffffff;color:#152238;border:none;padding:28px 40px;text-align:center;border-radius:10px;box-shadow:0 10px 50px #00000055;}
+  .banner h2{margin:0 0 6px;font-size:26px;letter-spacing:.5px;font-family:'Rubik',sans-serif;}
+  .banner p{color:#5c6b80;margin:0 0 16px;font-size:13px;}
+  .banner button{margin-top:4px;}
+
+  #controls{display:flex;gap:10px;align-items:center;padding:10px 20px;background:var(--panel);flex-wrap:wrap;}
+  button{background:var(--panel-2);color:var(--text);border:none;padding:9px 16px;
+    font-family:'Rubik',sans-serif;font-size:12px;font-weight:500;letter-spacing:.2px;border-radius:20px;cursor:pointer;transition:.15s;}
+  button:hover{background:#294369;}
+  button.active{background:var(--accent);color:#3a2600;font-weight:700;}
+  button:disabled{opacity:.35;cursor:not-allowed;}
+  button:disabled:hover{background:var(--panel-2);}
+  .cooldownBar{width:110px;height:6px;background:#0a1424;border-radius:3px;overflow:hidden;}
+  .cooldownFill{height:100%;background:var(--amber);width:0%;transition:width .1s linear;}
+
+  /* ---------- RIGHT: SIDEBAR ---------- */
+  #sidebar{width:340px;flex-shrink:0;background:var(--panel);
+    display:flex;flex-direction:column;overflow:hidden;}
+  .panelBlock{border-bottom:1px solid var(--border);padding:16px 18px;}
+  .panelTitle{font-size:11px;letter-spacing:1.5px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;font-weight:600;}
+  .statRow{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:13px;color:var(--text);}
+  .statRow .val{color:var(--accent);font-weight:700;font-size:17px;font-family:'Rubik',sans-serif;}
+  .progressOuter{height:8px;background:#0a1424;border-radius:4px;overflow:hidden;margin-top:4px;}
+  .progressInner{height:100%;background:var(--accent);width:0%;}
+
+  #leaderboard{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px;}
+  #leaderboard li{display:flex;align-items:center;gap:8px;font-size:12px;}
+  .swatch{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+  #leaderboard .name{flex:1;color:var(--text);}
+  #leaderboard .pct{color:var(--muted);font-weight:500;}
+
+  #kickBlock{flex:1;display:flex;flex-direction:column;min-height:0;}
+  #kickHeader{display:flex;gap:6px;margin-bottom:8px;}
+  #kickInput{flex:1;background:var(--panel-2);border:none;color:var(--text);
+    padding:9px 12px;font-family:'Inter',sans-serif;font-size:12px;border-radius:16px;}
+  #kickInput::placeholder{color:var(--muted);}
+  #kickStatus{font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5;}
+  #kickMessages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;font-size:12px;}
+  #kickMessages .msg{line-height:1.4;word-break:break-word;color:var(--text);}
+  #kickMessages .msg .u{color:var(--accent);font-weight:700;}
+  #kickMessages .msg.demo .u{color:#7fa8ff;}
+  #kickMessages::-webkit-scrollbar{width:5px;}
+  #kickMessages::-webkit-scrollbar-thumb{background:var(--panel-2);border-radius:3px;}
+  .smallBtnRow{display:flex;gap:6px;margin-top:8px;}
+  .smallBtnRow button{flex:1;font-size:11px;padding:7px;}
+
+  #startOverlay{position:absolute;inset:0;background:#15223866;display:flex;align-items:center;justify-content:center;z-index:5;pointer-events:none;}
+  #startOverlay .box{pointer-events:auto;text-align:center;width:380px;max-width:88%;padding:26px 28px 22px;background:#ffffffee;border-radius:14px;box-shadow:0 14px 50px #00000045;backdrop-filter:blur(6px);}
+  #startOverlay h1{font-size:28px;letter-spacing:.5px;color:#152238;margin:0 0 4px;font-family:'Rubik',sans-serif;}
+  #startOverlay h1 span{color:var(--accent);}
+  #startOverlay .tagline{color:#5c6b80;font-size:12.5px;margin:0 0 18px;}
+  .legend{display:flex;flex-direction:column;gap:9px;text-align:left;margin-bottom:18px;}
+  .legendRow{display:flex;align-items:center;gap:10px;font-size:12px;color:#33415a;background:#f2f6fa;border-radius:8px;padding:8px 10px;}
+  .legendIcon{font-size:15px;flex-shrink:0;width:18px;text-align:center;}
+  .rivalPicker{margin-bottom:20px;}
+  .rivalLabel{font-size:10.5px;letter-spacing:1px;text-transform:uppercase;color:#8494a8;font-weight:600;margin-bottom:8px;}
+  .rivalOptions{display:flex;gap:8px;justify-content:center;}
+  .rivalOpt{background:#eef2f7;color:#33415a;border:2px solid transparent;border-radius:10px;padding:8px 0;width:46px;
+    font-family:'Rubik',sans-serif;font-weight:600;font-size:14px;cursor:pointer;transition:.15s;}
+  .rivalOpt:hover{background:#e2e9f2;}
+  .rivalOpt.active{background:var(--accent-dim);border-color:var(--accent);color:#7a5400;}
+  .cta{font-size:12.5px;font-weight:600;color:#152238;letter-spacing:.2px;
+    animation:ctaPulse 1.6s ease-in-out infinite;}
+  @keyframes ctaPulse{0%,100%{opacity:1;}50%{opacity:.5;}}
+  #toast{position:absolute;top:14px;left:50%;transform:translateX(-50%) translateY(-10px);background:#152238ee;
+    border:none;color:#fff;padding:8px 16px;border-radius:20px;font-size:12px;
+    letter-spacing:.2px;opacity:0;transition:opacity .2s, transform .2s;pointer-events:none;z-index:8;white-space:nowrap;box-shadow:0 4px 14px #00000040;}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:820px){
+    #app{flex-direction:column;}
+    #sidebar{width:100%;height:44vh;border-left:none;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="mapWrap">
+    <div id="topbar">
+      <div class="logo">WORLD<span>FRONT</span></div>
+      <div class="sub">Territory conquest · World map</div>
+    </div>
+    <div id="mapStage">
+      <div id="canvasFrame">
+        <canvas id="mapCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="bannerLayer"></div>
+        <div id="startOverlay">
+          <div class="box">
+            <h1>WORLD<span>FRONT</span></h1>
+            <p class="tagline">Conquer the globe. Free-for-all against 5 rival powers.</p>
+
+            <div class="legend">
+              <div class="legendRow"><span class="legendIcon">🖱️</span><span>Left-click land touching your border to take it</span></div>
+              <div class="legendRow"><span class="legendIcon">✊</span><span>Hold right-click and drag to fast-fill a wider area</span></div>
+              <div class="legendRow"><span class="legendIcon">🚀</span><span>Launch missiles to clear enemy territory from a distance</span></div>
+            </div>
+
+            <div class="rivalPicker">
+              <div class="rivalLabel">Rival powers</div>
+              <div class="rivalOptions" id="rivalOptions">
+                <button type="button" class="rivalOpt" data-n="3">3</button>
+                <button type="button" class="rivalOpt active" data-n="5">5</button>
+                <button type="button" class="rivalOpt" data-n="7">7</button>
+              </div>
+            </div>
+
+            <div class="cta">Click any green land on the map to deploy your HQ</div>
+          </div>
+        </div>
+        <div id="toast"></div>
+      </div>
+      <div id="hint">Left-click to expand one tile · Hold right-click and drag to fast-fill</div>
+    </div>
+    <div id="controls">
+      <button id="missileBtn">🚀 Launch Missile (40 troops)</button>
+      <div class="cooldownBar"><div class="cooldownFill" id="cooldownFill"></div></div>
+      <span style="flex:1"></span>
+      <button id="resetBtn">↺ Restart</button>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div class="panelBlock">
+      <div class="panelTitle">Command Status</div>
+      <div class="statRow"><span>Troops</span><span class="val" id="statTroops">0</span></div>
+      <div class="statRow"><span>Territory</span><span class="val" id="statPct">0%</span></div>
+      <div class="progressOuter"><div class="progressInner" id="statPctBar"></div></div>
+    </div>
+    <div class="panelBlock">
+      <div class="panelTitle">World Powers</div>
+      <ul id="leaderboard"></ul>
+    </div>
+    <div class="panelBlock" id="kickBlock">
+      <div class="panelTitle">Kick Live Chat</div>
+      <div id="kickHeader">
+        <input id="kickInput" placeholder="kick channel name (e.g. xqc)" />
+        <button id="kickConnectBtn">Connect</button>
+      </div>
+      <div id="kickStatus">Not connected. Enter a Kick channel name above, or try demo chat.</div>
+      <div id="kickMessages"></div>
+      <div class="smallBtnRow">
+        <button id="kickDemoBtn">▶ Demo Chat</button>
+        <button id="kickClearBtn">Clear</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ======================= GRID / MAP SETUP ======================= */
+const W = 200, H = 100;         // simulation grid resolution (2:1 equirectangular)
+const DISPLAY_SCALE = 4;        // px per cell on screen
+const DISPLAY_W = W*DISPLAY_SCALE, DISPLAY_H = H*DISPLAY_SCALE;
+
+const mapCanvas = document.getElementById('mapCanvas');
+const overlayCanvas = document.getElementById('overlayCanvas');
+mapCanvas.width = DISPLAY_W; mapCanvas.height = DISPLAY_H;
+overlayCanvas.width = DISPLAY_W; overlayCanvas.height = DISPLAY_H;
+const ctx = mapCanvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const octx = overlayCanvas.getContext('2d');
+
+// small offscreen buffer we build each frame, then blow up onto the visible canvas
+const buf = document.createElement('canvas');
+buf.width = W; buf.height = H;
+const bctx = buf.getContext('2d');
+const imgData = bctx.createImageData(W,H);
+
+function lonLatToXY(lon,lat){
+  return [ (lon+180)*(W/360), (90-lat)*(H/180) ];
+}
+
+// Rough, simplified continent outlines (lon,lat) — stylised, not survey-accurate.
+const CONTINENTS = [
+  // North America
+  [[-165,68],[-165,55],[-152,58],[-140,60],[-130,55],[-125,48],[-124,40],[-117,32],
+   [-105,20],[-97,18],[-90,15],[-83,10],[-80,25],[-75,35],[-70,45],[-60,50],[-65,60],
+   [-80,70],[-100,72],[-130,70],[-165,68]],
+  // Greenland
+  [[-52,60],[-58,68],[-45,82],[-25,82],[-20,70],[-30,62],[-45,58],[-52,60]],
+  // South America
+  [[-80,10],[-77,7],[-75,2],[-70,-5],[-70,-20],[-72,-35],[-68,-55],[-64,-55],
+   [-58,-38],[-48,-25],[-40,-10],[-50,0],[-60,5],[-70,10],[-80,10]],
+  // Africa
+  [[-17,15],[-16,22],[-10,32],[10,37],[25,32],[35,25],[43,15],[50,10],[45,0],
+   [40,-15],[30,-30],[18,-35],[12,-20],[15,-5],[10,5],[-10,5],[-17,15]],
+  // Eurasia
+  [[-10,36],[-9,43],[0,45],[10,55],[20,60],[30,65],[45,66],[60,68],[80,72],
+   [100,75],[130,72],[140,60],[145,45],[140,35],[130,33],[122,32],[120,25],
+   [110,20],[100,10],[95,5],[80,8],[70,15],[60,25],[50,25],[45,15],[35,30],
+   [28,36],[20,40],[10,38],[0,40],[-10,36]],
+  // Australia
+  [[115,-20],[120,-14],[135,-11],[145,-15],[153,-25],[150,-35],[140,-38],
+   [130,-32],[115,-30],[112,-22],[115,-20]],
+];
+const ISLANDS = [ // [lon,lat,rx,ry]
+  [-3,54,3,2],[138,37,3,4],[-19,65,2,1.5],[47,-19,1.5,3],
+  [113,-2,4,2.5],[172,-41,1.5,3],[121,17,1.5,3],[-9,39,2,1.5]
+];
+
+function buildLandMask(){
+  bctx.fillStyle = '#000'; bctx.fillRect(0,0,W,H);
+  bctx.fillStyle = '#fff';
+  CONTINENTS.forEach(poly=>{
+    bctx.beginPath();
+    poly.forEach((p,i)=>{
+      const [x,y] = lonLatToXY(p[0],p[1]);
+      if(i===0) bctx.moveTo(x,y); else bctx.lineTo(x,y);
+    });
+    bctx.closePath(); bctx.fill();
+  });
+  ISLANDS.forEach(([lon,lat,rx,ry])=>{
+    const [x,y] = lonLatToXY(lon,lat);
+    bctx.beginPath(); bctx.ellipse(x,y,rx,ry,0,0,Math.PI*2); bctx.fill();
+  });
+  const data = bctx.getImageData(0,0,W,H).data;
+  const land = new Uint8Array(W*H);
+  for(let i=0;i<W*H;i++) land[i] = data[i*4] > 128 ? 1 : 0;
+  return land;
+}
+
+const landMask = buildLandMask();
+
+/* ======================= GAME STATE ======================= */
+let NUM_BOTS = 5;
+const PLAYER_ID = 1;
+let BOT_IDS = [];
+let ALL_IDS = [];
+let NAMES = {};
+const BOT_NAME_POOL = ['CRIMSON PACT','AMBER HORDE','VIOLET REICH','JADE UNION','SABLE FLEET','COBALT AXIS','TEAL DOMINION'];
+const BASE_COLORS = {
+  '-1': [111,168,201],   // ocean
+  '0':  [159,191,127],   // neutral land
+  '1':  [43,120,230],    // player — blue
+};
+const BOT_COLORS = [[224,62,62],[240,164,45],[151,71,214],[36,166,130],[219,84,150],[221,192,45],[70,130,220]];
+let COLORS = {};
+
+function rebuildFactions(numBots){
+  NUM_BOTS = numBots;
+  BOT_IDS = []; for(let i=0;i<NUM_BOTS;i++) BOT_IDS.push(2+i);
+  ALL_IDS = [PLAYER_ID, ...BOT_IDS];
+  NAMES = {1:'YOU'};
+  BOT_IDS.forEach((id,i)=>NAMES[id]=BOT_NAME_POOL[i%BOT_NAME_POOL.length]);
+  COLORS = Object.assign({}, BASE_COLORS);
+  BOT_IDS.forEach((id,i)=>COLORS[id]=BOT_COLORS[i%BOT_COLORS.length]);
+}
+rebuildFactions(NUM_BOTS);
+
+let ownerGrid, troopDefense; // troopDefense not per-cell; using pooled troops per faction
+let troops = {};
+let territoryCount = {};
+let frontier = {}; // bot_id -> Set of owned cell indices bordering capturable land
+let neighborCache = null;
+let totalLand = 0;
+let gameStarted = false;
+let gameOver = false;
+let missileMode = false;
+let missileCooldown = 0;
+const MISSILE_COOLDOWN_MS = 8000;
+const MISSILE_COST = 40;
+const MISSILE_RADIUS = 5;
+let projectiles = []; // active missile animations
+
+function idx(x,y){ return y*W+x; }
+
+function buildNeighborCache(){
+  neighborCache = new Array(W*H);
+  for(let y=0;y<H;y++){
+    for(let x=0;x<W;x++){
+      const list=[];
+      for(let dy=-1;dy<=1;dy++){
+        for(let dx=-1;dx<=1;dx++){
+          if(dx===0&&dy===0) continue;
+          const nx=x+dx, ny=y+dy;
+          if(nx>=0&&nx<W&&ny>=0&&ny<H) list.push(idx(nx,ny));
+        }
+      }
+      neighborCache[idx(x,y)] = list;
+    }
+  }
+}
+buildNeighborCache();
+
+function resetGame(){
+  ownerGrid = new Int8Array(W*H);
+  totalLand = 0;
+  for(let i=0;i<W*H;i++){
+    if(landMask[i]){ ownerGrid[i] = 0; totalLand++; }
+    else ownerGrid[i] = -1;
+  }
+  troops = {}; territoryCount = {}; frontier = {};
+  ALL_IDS.forEach(id=>{ troops[id]=60; territoryCount[id]=0; if(BOT_IDS.includes(id)) frontier[id]=new Set(); });
+  gameStarted = false; gameOver = false; missileMode = false; missileCooldown = 0;
+  projectiles = [];
+  document.getElementById('startOverlay').style.display = 'flex';
+  document.getElementById('bannerLayer').innerHTML = '';
+  document.getElementById('missileBtn').classList.remove('active');
+}
+resetGame();
+
+function refreshFrontier(i){
+  const owner = ownerGrid[i];
+  if(!BOT_IDS.includes(owner)) return;
+  const nbrs = neighborCache[i];
+  let isFrontier = false;
+  for(let k=0;k<nbrs.length;k++){
+    const n = nbrs[k];
+    if(ownerGrid[n] !== -1 && ownerGrid[n] !== owner){ isFrontier = true; break; }
+  }
+  if(isFrontier) frontier[owner].add(i); else frontier[owner].delete(i);
+}
+
+function captureCell(i, newOwner){
+  const oldOwner = ownerGrid[i];
+  if(oldOwner === newOwner) return;
+  if(oldOwner > 0) territoryCount[oldOwner] = Math.max(0,(territoryCount[oldOwner]||0)-1);
+  ownerGrid[i] = newOwner;
+  if(newOwner > 0) territoryCount[newOwner] = (territoryCount[newOwner]||0)+1;
+  refreshFrontier(i);
+  const nbrs = neighborCache[i];
+  for(let k=0;k<nbrs.length;k++) refreshFrontier(nbrs[k]);
+}
+
+function spawnBlob(cx,cy,owner,radius){
+  for(let y=Math.max(0,cy-radius); y<Math.min(H,cy+radius+1); y++){
+    for(let x=Math.max(0,cx-radius); x<Math.min(W,cx+radius+1); x++){
+      const dx=x-cx, dy=y-cy;
+      if(dx*dx+dy*dy<=radius*radius && landMask[idx(x,y)]) captureCell(idx(x,y), owner);
+    }
+  }
+}
+
+function randomLandCell(){
+  for(let tries=0; tries<2000; tries++){
+    const x = Math.floor(Math.random()*W), y = Math.floor(Math.random()*H);
+    if(landMask[idx(x,y)] && ownerGrid[idx(x,y)]===0) return [x,y];
+  }
+  return null;
+}
+
+function startGame(px,py){
+  spawnBlob(px,py,PLAYER_ID,2);
+  const used = [[px,py]];
+  BOT_IDS.forEach(id=>{
+    let best=null, bestDist=-1;
+    for(let attempt=0; attempt<60; attempt++){
+      const c = randomLandCell();
+      if(!c) continue;
+      let minDist = Infinity;
+      used.forEach(u=>{ const d=(u[0]-c[0])**2+(u[1]-c[1])**2; if(d<minDist) minDist=d; });
+      if(minDist>bestDist){ bestDist=minDist; best=c; }
+    }
+    if(best){ spawnBlob(best[0],best[1],id,2); used.push(best); }
+  });
+  gameStarted = true;
+  document.getElementById('startOverlay').style.display = 'none';
+}
+
+/* ======================= SIMULATION TICK ======================= */
+let lastTick = 0, lastIncome = 0;
+const TICK_MS = 220;
+const INCOME_MS = 1000;
+
+function simTick(){
+  BOT_IDS.forEach(bot=>{
+    if(troops[bot] < 1 || frontier[bot].size===0) return;
+    const arr = Array.from(frontier[bot]);
+    const attempts = Math.min(2, arr.length);
+    for(let a=0; a<attempts; a++){
+      const i = arr[Math.floor(Math.random()*arr.length)];
+      const nbrs = neighborCache[i];
+      const candidates = nbrs.filter(n=>ownerGrid[n]!==-1 && ownerGrid[n]!==bot);
+      if(candidates.length===0) continue;
+      const target = candidates[Math.floor(Math.random()*candidates.length)];
+      const targetOwner = ownerGrid[target];
+      const cost = targetOwner===0 ? 1 : 3;
+      if(troops[bot] >= cost){
+        troops[bot] -= cost;
+        if(targetOwner>0) troops[targetOwner] = Math.max(0, troops[targetOwner]-1);
+        captureCell(target, bot);
+      }
+    }
+  });
+}
+
+function incomeTick(){
+  ALL_IDS.forEach(id=>{
+    troops[id] += Math.floor((territoryCount[id]||0)/8) + 1;
+  });
+}
+
+function checkGameOver(){
+  if(gameOver || !gameStarted) return;
+  const pPct = territoryCount[PLAYER_ID]/totalLand;
+  if(territoryCount[PLAYER_ID]===0){
+    gameOver = true;
+    showBanner('DEFEATED', 'Your territory has been wiped from the map.');
+  } else if(pPct >= 0.5){
+    gameOver = true;
+    showBanner('VICTORY', 'You control the majority of the known world.');
+  }
+}
+
+function showBanner(title, sub){
+  document.getElementById('bannerLayer').innerHTML =
+    `<div class="banner"><h2>${title}</h2><p>${sub}</p><button onclick="location.reload()">↺ Play Again</button></div>`;
+}
+
+/* ======================= MISSILES ======================= */
+function launchMissile(tx,ty){
+  if(troops[PLAYER_ID] < MISSILE_COST || missileCooldown > 0) return;
+  troops[PLAYER_ID] -= MISSILE_COST;
+  missileCooldown = MISSILE_COOLDOWN_MS;
+  projectiles.push({ tx, ty, t:0, dur:900, exploded:false });
+}
+
+function resolveMissileImpact(tx,ty){
+  for(let y=Math.max(0,ty-MISSILE_RADIUS); y<Math.min(H,ty+MISSILE_RADIUS+1); y++){
+    for(let x=Math.max(0,tx-MISSILE_RADIUS); x<Math.min(W,tx+MISSILE_RADIUS+1); x++){
+      const dx=x-tx, dy=y-ty;
+      if(dx*dx+dy*dy<=MISSILE_RADIUS*MISSILE_RADIUS){
+        const i = idx(x,y);
+        const owner = ownerGrid[i];
+        if(owner>0 && owner!==PLAYER_ID){
+          troops[owner] = Math.max(0, troops[owner]-1);
+          captureCell(i, 0);
+        }
+      }
+    }
+  }
+}
+
+/* ======================= RENDER ======================= */
+function render(){
+  const data = imgData.data;
+  for(let i=0;i<W*H;i++){
+    const owner = ownerGrid[i];
+    const c = COLORS[owner] || COLORS['0'];
+    const o = i*4;
+    data[o]=c[0]; data[o+1]=c[1]; data[o+2]=c[2]; data[o+3]=255;
+  }
+  bctx.putImageData(imgData,0,0);
+  ctx.clearRect(0,0,DISPLAY_W,DISPLAY_H);
+  ctx.drawImage(buf,0,0,W,H,0,0,DISPLAY_W,DISPLAY_H);
+
+  // overlay: missiles
+  octx.clearRect(0,0,DISPLAY_W,DISPLAY_H);
+
+  // missiles
+  projectiles.forEach(p=>{
+    const prog = Math.min(1, p.t/p.dur);
+    const px = p.tx*DISPLAY_SCALE, py = p.ty*DISPLAY_SCALE;
+    if(prog < 1){
+      const arcH = 60;
+      const midX = px, midY = py - arcH*Math.sin(prog*Math.PI)-40;
+      octx.fillStyle = '#ffb454';
+      octx.beginPath();
+      octx.arc(px, py - Math.sin(prog*Math.PI)*80, 3, 0, Math.PI*2);
+      octx.fill();
+    } else if(!p.exploded){
+      p.exploded = true;
+      resolveMissileImpact(p.tx, p.ty);
+    }
+    if(p.exploded){
+      const age = p.t - p.dur;
+      if(age < 400){
+        const r = (age/400) * MISSILE_RADIUS * DISPLAY_SCALE;
+        octx.strokeStyle = `rgba(255,120,80,${1-age/400})`;
+        octx.lineWidth = 3;
+        octx.beginPath(); octx.arc(px,py,r,0,Math.PI*2); octx.stroke();
+      }
+    }
+  });
+  projectiles = projectiles.filter(p => !(p.exploded && (p.t-p.dur) > 400));
+
+  // hq markers
+  ALL_IDS.forEach(id=>{}); // markers omitted for perf/simplicity; territory color is the marker
+}
+
+/* ======================= UI UPDATE ======================= */
+function updateUI(){
+  document.getElementById('statTroops').textContent = Math.floor(troops[PLAYER_ID]||0);
+  const pct = totalLand ? ((territoryCount[PLAYER_ID]||0)/totalLand*100) : 0;
+  document.getElementById('statPct').textContent = pct.toFixed(1)+'%';
+  document.getElementById('statPctBar').style.width = Math.min(100,pct)+'%';
+
+  const list = document.getElementById('leaderboard');
+  const rows = ALL_IDS.map(id=>{
+    const p = totalLand ? ((territoryCount[id]||0)/totalLand*100) : 0;
+    const c = COLORS[id];
+    return {id, p, color:`rgb(${c[0]},${c[1]},${c[2]})`, name: NAMES[id]};
+  }).sort((a,b)=>b.p-a.p);
+  list.innerHTML = rows.map(r=>
+    `<li><span class="swatch" style="background:${r.color}"></span><span class="name">${r.name}</span><span class="pct">${r.p.toFixed(1)}%</span></li>`
+  ).join('');
+
+  const cdPct = missileCooldown>0 ? (1 - missileCooldown/MISSILE_COOLDOWN_MS)*100 : 100;
+  document.getElementById('cooldownFill').style.width = cdPct+'%';
+  const missileBtn = document.getElementById('missileBtn');
+  missileBtn.disabled = (troops[PLAYER_ID] < MISSILE_COST || missileCooldown>0);
+}
+
+/* ======================= MAIN LOOP ======================= */
+let lastFrame = 0;
+function loop(now){
+  const dt = now - lastFrame; lastFrame = now;
+  if(gameStarted && !gameOver){
+    lastTick += dt;
+    while(lastTick >= TICK_MS){ simTick(); lastTick -= TICK_MS; }
+    lastIncome += dt;
+    while(lastIncome >= INCOME_MS){ incomeTick(); lastIncome -= INCOME_MS; }
+    if(missileCooldown>0) missileCooldown = Math.max(0, missileCooldown-dt);
+    projectiles.forEach(p=>p.t+=dt);
+    checkGameOver();
+  }
+  render();
+  updateUI();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ======================= INPUT ======================= */
+function canvasToCell(evt){
+  const rect = mapCanvas.getBoundingClientRect();
+  const scaleX = mapCanvas.width / rect.width;
+  const scaleY = mapCanvas.height / rect.height;
+  const px = (evt.clientX - rect.left) * scaleX;
+  const py = (evt.clientY - rect.top) * scaleY;
+  const x = Math.floor(px / DISPLAY_SCALE), y = Math.floor(py / DISPLAY_SCALE);
+  if(x<0||x>=W||y<0||y>=H) return null;
+  return [x,y];
+}
+
+let toastTimer = null;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>el.classList.remove('show'), 1600);
+}
+
+mapCanvas.addEventListener('click', (evt)=>{
+  const cell = canvasToCell(evt);
+  if(!cell) return;
+  const [x,y] = cell;
+  const i = idx(x,y);
+
+  if(!gameStarted){
+    if(landMask[i]) startGame(x,y);
+    else toast('That\'s water — click on the green land');
+    return;
+  }
+  if(gameOver) return;
+
+  if(missileMode){
+    launchMissile(x,y);
+    missileMode = false;
+    document.getElementById('missileBtn').classList.remove('active');
+    return;
+  }
+
+  if(ownerGrid[i]===-1){ toast('That\'s water — pick a land tile'); return; }
+  if(ownerGrid[i]===PLAYER_ID) return; // already yours, no message needed
+  const nbrs = neighborCache[i];
+  const adjacent = nbrs.some(n=>ownerGrid[n]===PLAYER_ID);
+  if(!adjacent){ toast('Too far — click land touching your territory'); return; }
+  const targetOwner = ownerGrid[i];
+  const cost = targetOwner===0 ? 2 : 5;
+  if(troops[PLAYER_ID] >= cost){
+    troops[PLAYER_ID] -= cost;
+    if(targetOwner>0) troops[targetOwner] = Math.max(0, troops[targetOwner]-2);
+    captureCell(i, PLAYER_ID);
+  } else {
+    toast('Not enough troops (' + cost + ' needed)');
+  }
+});
+
+document.getElementById('missileBtn').addEventListener('click', ()=>{
+  if(!gameStarted || gameOver) return;
+  if(troops[PLAYER_ID] < MISSILE_COST || missileCooldown>0) return;
+  missileMode = !missileMode;
+  document.getElementById('missileBtn').classList.toggle('active', missileMode);
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>location.reload());
+
+document.querySelectorAll('.rivalOpt').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    if(gameStarted) return;
+    document.querySelectorAll('.rivalOpt').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    rebuildFactions(parseInt(btn.dataset.n,10));
+    resetGame();
+  });
+});
+
+/* ---- fast fill: right-click (or right-click + drag) paints a burst of territory at once ---- */
+const BURST_RADIUS = 2;
+const BURST_THROTTLE_MS = 90;
+let rightMouseDown = false;
+let lastBurstTime = 0;
+
+mapCanvas.addEventListener('contextmenu', (evt)=>evt.preventDefault());
+
+mapCanvas.addEventListener('mousedown', (evt)=>{
+  if(evt.button !== 2) return;
+  evt.preventDefault();
+  rightMouseDown = true;
+  lastBurstTime = 0;
+  tryBurstAt(evt);
+});
+window.addEventListener('mouseup', (evt)=>{ if(evt.button===2) rightMouseDown = false; });
+window.addEventListener('blur', ()=>{ rightMouseDown = false; });
+mapCanvas.addEventListener('mousemove', (evt)=>{
+  if(!rightMouseDown) return;
+  const now = performance.now();
+  if(now - lastBurstTime < BURST_THROTTLE_MS) return;
+  lastBurstTime = now;
+  tryBurstAt(evt);
+});
+
+function tryBurstAt(evt){
+  if(!gameStarted || gameOver || missileMode) return;
+  const cell = canvasToCell(evt);
+  if(!cell) return;
+  burstCapture(cell[0], cell[1]);
+}
+
+function burstCapture(cx, cy){
+  const i0 = idx(cx,cy);
+  if(ownerGrid[i0] === -1){ toast('That\'s water — paint on land'); return; }
+  const touchesPlayer = ownerGrid[i0]===PLAYER_ID || neighborCache[i0].some(n=>ownerGrid[n]===PLAYER_ID);
+  if(!touchesPlayer){ toast('Too far — start painting from your border'); return; }
+
+  let captured = 0, blocked = false;
+  for(let y=Math.max(0,cy-BURST_RADIUS); y<=Math.min(H-1,cy+BURST_RADIUS); y++){
+    for(let x=Math.max(0,cx-BURST_RADIUS); x<=Math.min(W-1,cx+BURST_RADIUS); x++){
+      const dx=x-cx, dy=y-cy;
+      if(dx*dx+dy*dy > BURST_RADIUS*BURST_RADIUS) continue;
+      const i = idx(x,y);
+      if(ownerGrid[i]===-1 || ownerGrid[i]===PLAYER_ID) continue;
+      const targetOwner = ownerGrid[i];
+      const cost = targetOwner===0 ? 2 : 5;
+      if(troops[PLAYER_ID] >= cost){
+        troops[PLAYER_ID] -= cost;
+        if(targetOwner>0) troops[targetOwner] = Math.max(0, troops[targetOwner]-2);
+        captureCell(i, PLAYER_ID);
+        captured++;
+      } else blocked = true;
+    }
+  }
+  if(captured===0 && blocked) toast('Not enough troops to paint here');
+}
+
+/* ======================= KICK CHAT ======================= */
+const kickStatus = document.getElementById('kickStatus');
+const kickMessages = document.getElementById('kickMessages');
+let demoTimer = null;
+let pusherInstance = null;
+
+function addChatMessage(user, text, demo){
+  const div = document.createElement('div');
+  div.className = 'msg' + (demo ? ' demo' : '');
+  const uSpan = document.createElement('span');
+  uSpan.className = 'u';
+  uSpan.textContent = (demo?'[DEMO] ':'') + user + ': ';
+  div.appendChild(uSpan);
+  div.appendChild(document.createTextNode(text));
+  kickMessages.appendChild(div);
+  while(kickMessages.children.length > 60) kickMessages.removeChild(kickMessages.firstChild);
+  kickMessages.scrollTop = kickMessages.scrollHeight;
+}
+
+async function connectKick(channelSlug){
+  if(!channelSlug) return;
+  stopDemo();
+  kickStatus.textContent = 'Connecting to #' + channelSlug + '…';
+  try{
+    const res = await fetch(`https://kick.com/api/v2/channels/${encodeURIComponent(channelSlug)}`);
+    if(!res.ok) throw new Error('channel lookup failed (HTTP '+res.status+')');
+    const data = await res.json();
+    const chatroomId = data && data.chatroom && data.chatroom.id;
+    if(!chatroomId) throw new Error('no chatroom id in response');
+    if(pusherInstance){ pusherInstance.disconnect(); pusherInstance=null; }
+    pusherInstance = new Pusher('32cbd69e4b950bf97679', { cluster:'us2' });
+    const channel = pusherInstance.subscribe(`chatrooms.${chatroomId}.v2`);
+    channel.bind('App\\Events\\ChatMessageEvent', (payload)=>{
+      try{
+        const sender = payload.sender ? payload.sender.username : 'unknown';
+        addChatMessage(sender, payload.content || '');
+      }catch(e){}
+    });
+    kickStatus.textContent = 'Connected — live chat from #' + channelSlug;
+  }catch(err){
+    kickStatus.textContent = 'Could not connect (' + err.message + '). Kick\'s API often blocks direct browser requests (CORS) from pages like this one. Try Demo Chat instead, or run this file from your own server/proxy.';
+  }
+}
+
+const DEMO_USERS = ['viewer42','streamSniper','pogChamp99','lurker_lars','chatGPTfan','xX_gamer_Xx','frontlineFan'];
+const DEMO_LINES = ['gg','attack the red one!','lol nice missile','who is winning rn','pog','send troops north','this is so addicting','yo the amber horde is huge','w game','launch a nuke on them 😭'];
+function startDemo(){
+  stopDemo();
+  kickStatus.textContent = 'Demo mode — simulated chat, not a real Kick connection.';
+  demoTimer = setInterval(()=>{
+    const u = DEMO_USERS[Math.floor(Math.random()*DEMO_USERS.length)];
+    const m = DEMO_LINES[Math.floor(Math.random()*DEMO_LINES.length)];
+    addChatMessage(u, m, true);
+  }, 1400);
+}
+function stopDemo(){ if(demoTimer){ clearInterval(demoTimer); demoTimer=null; } }
+
+document.getElementById('kickConnectBtn').addEventListener('click', ()=>{
+  const val = document.getElementById('kickInput').value.trim().toLowerCase();
+  connectKick(val);
+});
+document.getElementById('kickInput').addEventListener('keydown', (e)=>{
+  if(e.key==='Enter') document.getElementById('kickConnectBtn').click();
+});
+document.getElementById('kickDemoBtn').addEventListener('click', startDemo);
+document.getElementById('kickClearBtn').addEventListener('click', ()=>{ kickMessages.innerHTML=''; });
+
+})();
+</script>
+</body>
+</html>
